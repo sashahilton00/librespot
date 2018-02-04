@@ -6,6 +6,9 @@ use std::sync::mpsc::{RecvError, TryRecvError, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;
 use std;
+// Metadata socket
+use std::net::UdpSocket;
+use std::io;
 
 use core::config::{Bitrate, PlayerConfig};
 use core::session::Session;
@@ -14,7 +17,7 @@ use core::util::{self, SpotifyId, Subfile};
 use audio_backend::Sink;
 use audio::{AudioFile, AudioDecrypt};
 use audio::{VorbisDecoder, VorbisPacket};
-use metadata::{FileFormat, Track, Metadata};
+use metadata::{FileFormat, Track, Metadata,Artist,Album};
 use mixer::AudioFilter;
 
 pub struct Player {
@@ -336,6 +339,7 @@ impl PlayerInternal {
                 if let PlayerState::Paused { .. } = self.state {
                     self.state.paused_to_playing();
 
+                    info!("Play");
                     self.run_onstart();
                     self.start_sink();
                 } else {
@@ -347,6 +351,7 @@ impl PlayerInternal {
                 if let PlayerState::Playing { .. } = self.state {
                     self.state.playing_to_paused();
 
+                    info!("Pause");
                     self.stop_sink_if_running();
                     self.run_onstop();
                 } else {
@@ -373,13 +378,33 @@ impl PlayerInternal {
         }
     }
 
+    // 10 mins of google foo, with no Rust background gives::
+    fn snd_udp(&self, msg: String) -> Result<(), io::Error> {
+        let socket = try!(UdpSocket::bind("127.0.0.1:5001"));
+
+        try!(socket.send_to(msg.as_bytes(),"127.0.0.1:5000"));
+
+        Ok(())
+    }
+
+    fn snd_meta(&self, meta: String) {
+        match self.snd_udp(meta){
+            Ok(_) => (),
+            Err(err) => println!("Error: {:?}", err),
+        }
+    }
+
     fn run_onstart(&self) {
+        info!("onStart");
+        self.snd_meta(String::from("kSpDeviveActive"));
         if let Some(ref program) = self.config.onstart {
             util::run_program(program)
         }
     }
 
     fn run_onstop(&self) {
+        info!("onStop");
+        self.snd_meta(String::from("kSpDeviveInactive"));
         if let Some(ref program) = self.config.onstop {
             util::run_program(program)
         }
@@ -401,9 +426,11 @@ impl PlayerInternal {
     }
 
     fn load_track(&self, track_id: SpotifyId, position: i64) -> Option<Decoder> {
-        let track = Track::get(&self.session, track_id).wait().unwrap();
+        let track  = Track::get(&self.session, track_id).wait().unwrap();
+        let artist = Artist::get(&self.session,track.artists[0]).wait().unwrap();
+        let album = Album::get(&self.session,track.album).wait().unwrap();
 
-        info!("Loading track \"{}\"", track.name);
+        info!("Loading track \"{}\" by {} from {}", track.name,artist.name,album.name);
 
         let track = match self.find_available_alternative(&track) {
             Some(track) => track,
@@ -439,7 +466,15 @@ impl PlayerInternal {
             Err(err) => error!("Vorbis error: {:?}", err),
         }
 
-        info!("Track \"{}\" loaded", track.name);
+        let meta_json = json!({
+            "track_name": track.name,
+            "artist_name": artist.name,
+            "album_name": album.name,
+            "pos": position,
+        });
+
+        self.snd_meta(meta_json.to_string());
+        info!("Loaded Track \"{}\" by {} from {}", track.name,artist.name,album.name);
 
         Some(decoder)
     }
