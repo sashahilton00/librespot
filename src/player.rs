@@ -159,6 +159,7 @@ impl PlayerState {
             Paused { end_of_track, .. } |
             Playing { end_of_track, .. } => {
                 let _ = end_of_track.send(());
+                info!("End of track!");
             }
 
             Stopped => warn!("signal_end_of_track from stopped state"),
@@ -244,7 +245,10 @@ impl PlayerInternal {
 
     fn start_sink(&mut self) {
         match self.sink.start() {
-            Ok(()) => self.sink_running = true,
+            Ok(()) => { self.sink_running = true;
+                        info!("Sink Aquired!");
+                        self.snd_meta(String::from("kSpDeviveActive"));
+                      },
             Err(err) => error!("Could not start audio: {}", err),
         }
     }
@@ -257,6 +261,8 @@ impl PlayerInternal {
 
     fn stop_sink(&mut self) {
         self.sink.stop().unwrap();
+        info!("Sink disconnected");
+        self.snd_meta(String::from("kSpDeviveInactive"));
         self.sink_running = false;
     }
 
@@ -274,6 +280,7 @@ impl PlayerInternal {
             }
 
             None => {
+                // Signlling end of track, as there is no more data
                 self.stop_sink();
                 self.run_onstop();
 
@@ -287,6 +294,10 @@ impl PlayerInternal {
         debug!("command={:?}", cmd);
         match cmd {
             PlayerCommand::Load(track_id, play, position, end_of_track) => {
+                // Device asked to load track -- Notify active session!
+                self.snd_meta(String::from("kSpPlaybackNotifyBecameActive"));
+                // also, what all is in session?
+                info!("Session: {:?}",self.session.session_id());
                 if self.state.is_playing() {
                     self.stop_sink_if_running();
                 }
@@ -298,6 +309,9 @@ impl PlayerInternal {
                                 self.run_onstart();
                             }
                             self.start_sink();
+
+                            // We should send the metadata now, as the sink has started
+                            self.snd_meta(self.track_id_to_json(track_id, position));
 
                             self.state = PlayerState::Playing {
                                 decoder: decoder,
@@ -394,9 +408,33 @@ impl PlayerInternal {
         }
     }
 
+    fn track_id_to_json(&self, track_id: SpotifyId, position: u32) -> String {
+        // This function should idealy return a serde_json::Value type, not string
+        // to make adding more metadata convinient
+        let track  = Track::get(&self.session, track_id).wait().unwrap();
+        let artist = Artist::get(&self.session,track.artists[0]).wait().unwrap();
+        let album = Album::get(&self.session,track.album).wait().unwrap();
+
+        let meta_json = json!({
+            "track_id": track_id.to_base16(),
+            "track_name": track.name,
+            "artist_id":artist.id.to_base16(),
+            "artist_name": artist.name,
+            "album_id": album.id.to_base16(),
+            "album_name": album.name,
+            "duration": track.duration,
+            // type FileId.to_base16() string
+            "albumartId": album.covers[0].to_base16(),
+            "albumartId_SMALL": album.covers[1].to_base16(),
+            "albumartId_LARGE": album.covers[2].to_base16(),
+            "pos": position,
+        });
+
+        return meta_json.to_string();
+    }
+
     fn run_onstart(&self) {
         info!("onStart");
-        self.snd_meta(String::from("kSpDeviveActive"));
         if let Some(ref program) = self.config.onstart {
             util::run_program(program)
         }
@@ -404,7 +442,6 @@ impl PlayerInternal {
 
     fn run_onstop(&self) {
         info!("onStop");
-        self.snd_meta(String::from("kSpDeviveInactive"));
         if let Some(ref program) = self.config.onstop {
             util::run_program(program)
         }
@@ -466,14 +503,6 @@ impl PlayerInternal {
             Err(err) => error!("Vorbis error: {:?}", err),
         }
 
-        let meta_json = json!({
-            "track_name": track.name,
-            "artist_name": artist.name,
-            "album_name": album.name,
-            "pos": position,
-        });
-
-        self.snd_meta(meta_json.to_string());
         info!("Loaded Track \"{}\" by {} from {}", track.name,artist.name,album.name);
 
         Some(decoder)
