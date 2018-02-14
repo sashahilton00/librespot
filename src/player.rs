@@ -12,6 +12,7 @@ use std::io::Read;
 // Metadata socket
 use std::net::UdpSocket;
 use std::io;
+use keymaster;
 
 use core::config::{Bitrate, PlayerConfig};
 use core::session::Session;
@@ -37,6 +38,7 @@ struct PlayerInternal {
     sink: Box<Sink>,
     sink_running: bool,
     audio_filter: Option<Box<AudioFilter + Send>>,
+    token: keymaster::Token,
 }
 
 enum PlayerCommand {
@@ -67,6 +69,7 @@ impl Player {
                 sink: sink_builder(),
                 sink_running: false,
                 audio_filter: audio_filter,
+                token: keymaster::Token{access_token: "".to_string(), expires_in:0, token_type:"".to_string(), scope: vec!["".to_string(), "".to_string()]},
             };
 
             internal.run();
@@ -310,12 +313,18 @@ impl PlayerInternal {
 
     fn handle_command(&mut self, cmd: PlayerCommand) {
         debug!("command={:?}", cmd);
+        // Token::
+        let client_id = env!("CLIENT_ID");
+        let access    = "streaming,user-read-playback-state,user-modify-playback-state,user-read-currently-playing,user-read-private".to_string();
+        match keymaster::get_token(&self.session, &client_id, &access).wait() {
+            Ok(token) => self.token = token,
+            Err(err)  => info!("Err: {:?}",err),
+        }
+        self.snd_meta(json!({"token":self.token}).to_string());
         match cmd {
             PlayerCommand::Load(track_id, play, position, end_of_track) => {
                 // Device asked to load track -- Notify active session!
                 self.snd_meta(String::from("kSpPlaybackNotifyBecameActive"));
-                // also, what all is in session?
-                info!("Session: {:?}",self.session.session_id());
                 if self.state.is_playing() {
                     self.stop_sink_if_running();
                 }
@@ -435,21 +444,22 @@ impl PlayerInternal {
         let artist = Artist::get(&self.session,track.artists[0]).wait().unwrap();
         let album = Album::get(&self.session,track.album).wait().unwrap();
 
-        let meta_json = json!({
-            "track_id": track_id.to_base16(),
-            "track_name": track.name,
-            "artist_id":artist.id.to_base16(),
-            "artist_name": artist.name,
-            "album_id": album.id.to_base16(),
-            "album_name": album.name,
-            "duration": track.duration,
-            // type FileId.to_base16() string
-            "albumartId": album.covers[0].to_base16(),
-            "albumartId_SMALL": album.covers[1].to_base16(),
-            "albumartId_LARGE": album.covers[2].to_base16(),
-            "pos": position,
-        });
-
+        let meta_json = json!(
+            {"metadata" : {
+                            "track_id": track_id.to_base16(),
+                            "track_name": track.name,
+                            "artist_id":artist.id.to_base16(),
+                            "artist_name": artist.name,
+                            "album_id": album.id.to_base16(),
+                            "album_name": album.name,
+                            "duration": track.duration,
+                            // type FileId.to_base16() string
+                            "albumartId": album.covers[0].to_base16(),
+                            "albumartId_SMALL": album.covers[1].to_base16(),
+                            "albumartId_LARGE": album.covers[2].to_base16(),
+                            "pos": position,
+                        }});
+        info!("Metadata_JSON = {:?}",meta_json.to_string());
         return meta_json.to_string();
     }
 
