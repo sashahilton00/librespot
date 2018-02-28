@@ -167,7 +167,7 @@ impl PlayerState {
             Paused { end_of_track, .. } |
             Playing { end_of_track, .. } => {
                 let _ = end_of_track.send(());
-                info!("End of track!");
+                debug!("End of track!");
             }
 
             Stopped => warn!("signal_end_of_track from stopped state"),
@@ -258,7 +258,7 @@ impl PlayerInternal {
     fn start_sink(&mut self) {
         match self.sink.start() {
             Ok(()) => { self.sink_running = true;
-                        info!("Sink Aquired!");
+                        debug!("Sink Aquired!");
                         self.snd_meta(String::from("kSpDeviveActive"));
                       },
             Err(err) => error!("Could not start audio: {}", err),
@@ -273,7 +273,7 @@ impl PlayerInternal {
 
     fn stop_sink(&mut self) {
         self.sink.stop().unwrap();
-        info!("Sink disconnected");
+        debug!("Sink disconnected");
         self.snd_meta(String::from("kSpDeviveInactive"));
         self.sink_running = false;
     }
@@ -320,6 +320,7 @@ impl PlayerInternal {
             Ok(token) => self.token = token,
             Err(err)  => info!("Err: {:?}",err),
         }
+
         self.snd_meta(json!({"token":self.token}).to_string());
         match cmd {
             PlayerCommand::Load(track_id, play, position, end_of_track) => {
@@ -382,7 +383,7 @@ impl PlayerInternal {
                 if let PlayerState::Paused { .. } = self.state {
                     self.state.paused_to_playing();
 
-                    info!("Play");
+                    debug!("Play");
                     self.run_onstart();
                     self.start_sink();
                 } else {
@@ -394,7 +395,7 @@ impl PlayerInternal {
                 if let PlayerState::Playing { .. } = self.state {
                     self.state.playing_to_paused();
 
-                    info!("Pause");
+                    debug!("Pause");
                     self.stop_sink_if_running();
                     self.run_onstop();
                 } else {
@@ -423,9 +424,9 @@ impl PlayerInternal {
 
     // 10 mins of google foo, with no Rust background gives::
     fn snd_udp(&self, msg: String) -> Result<(), io::Error> {
-        let socket = try!(UdpSocket::bind("127.0.0.1:5001"));
+        let socket = try!(UdpSocket::bind("127.0.0.1:5031"));
 
-        try!(socket.send_to(msg.as_bytes(),"127.0.0.1:5000"));
+        try!(socket.send_to(msg.as_bytes(),"127.0.0.1:5030"));
 
         Ok(())
     }
@@ -459,19 +460,18 @@ impl PlayerInternal {
                             "albumartId_LARGE": album.covers[2].to_base16(),
                             "pos": position,
                         }});
-        info!("Metadata_JSON = {:?}",meta_json.to_string());
         return meta_json.to_string();
     }
 
     fn run_onstart(&self) {
-        info!("onStart");
+        debug!("onStart");
         if let Some(ref program) = self.config.onstart {
             util::run_program(program)
         }
     }
 
     fn run_onstop(&self) {
-        info!("onStop");
+        debug!("onStop");
         if let Some(ref program) = self.config.onstop {
             util::run_program(program)
         }
@@ -497,7 +497,7 @@ impl PlayerInternal {
         let artist = Artist::get(&self.session,track.artists[0]).wait().unwrap();
         let album = Album::get(&self.session,track.album).wait().unwrap();
 
-        info!("Loading track \"{}\" by {} from {}", track.name,artist.name,album.name);
+        debug!("Loading track \"{}\" by {} from {}", track.name,artist.name,album.name);
 
         let track = match self.find_available_alternative(&track) {
             Some(track) => track,
@@ -558,7 +558,7 @@ impl PlayerInternal {
                 normalization_factor = 1.0/track_peak;
             }
 
-            info!("Applying normalization factor: {}", normalization_factor);
+            debug!("Applying normalization factor: {}", normalization_factor);
 
             // TODO there are also values for album gain/peak, which should be used if an album is playing
             // but I don't know how to determine if album is playing
