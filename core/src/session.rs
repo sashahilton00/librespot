@@ -1,9 +1,9 @@
 use bytes::Bytes;
-use futures::{Async, Future, IntoFuture, Poll, Stream};
 use futures::sync::mpsc;
+use futures::{Async, Future, IntoFuture, Poll, Stream};
 use std::io;
-use std::sync::{Arc, RwLock, Weak};
 use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+use std::sync::{Arc, RwLock, Weak};
 use tokio_core::reactor::{Handle, Remote};
 
 use apresolve::apresolve_or_fallback;
@@ -20,6 +20,7 @@ use mercury::MercuryManager;
 struct SessionData {
     country: String,
     canonical_username: String,
+    invalid: bool,
 }
 
 struct SessionInternal {
@@ -50,12 +51,13 @@ impl Session {
         cache: Option<Cache>,
         handle: Handle,
     ) -> Box<Future<Item = Session, Error = io::Error>> {
-        let access_point = apresolve_or_fallback::<io::Error>(&handle);
+        let access_point = apresolve_or_fallback::<io::Error>(&handle, &config.proxy);
 
         let handle_ = handle.clone();
+        let proxy = config.proxy.clone();
         let connection = access_point.and_then(move |addr| {
             info!("Connecting to AP \"{}\"", addr);
-            connection::connect::<&str>(&addr, &handle_)
+            connection::connect(addr, &handle_, &proxy)
         });
 
         let device_id = config.device_id.clone();
@@ -76,7 +78,9 @@ impl Session {
                 reusable_credentials.username.clone(),
             );
 
-            handle.spawn(task.map_err(|e| panic!(e)));
+            handle.spawn(task.map_err(|e| {
+                error!("{:?}", e);
+            }));
 
             session
         });
@@ -103,6 +107,7 @@ impl Session {
             data: RwLock::new(SessionData {
                 country: String::new(),
                 canonical_username: username,
+                invalid: false,
             }),
 
             tx_connection: sender_tx,
@@ -211,6 +216,15 @@ impl Session {
     pub fn session_id(&self) -> usize {
         self.0.session_id
     }
+
+    pub fn shutdown(&self) {
+        debug!("Invalidating session[{}]", self.0.session_id);
+        self.0.data.write().unwrap().invalid = true;
+    }
+
+    pub fn is_invalid(&self) -> bool {
+        self.0.data.read().unwrap().invalid
+    }
 }
 
 #[derive(Clone)]
@@ -239,6 +253,7 @@ where
 impl<S> Future for DispatchTask<S>
 where
     S: Stream<Item = (u8, Bytes)>,
+    <S as Stream>::Error: ::std::fmt::Debug,
 {
     type Item = ();
     type Error = S::Error;
@@ -250,7 +265,15 @@ where
         };
 
         loop {
-            let (cmd, data) = try_ready!(self.0.poll()).expect("connection closed");
+            let (cmd, data) = match self.0.poll() {
+                Ok(Async::Ready(t)) => t,
+                Ok(Async::NotReady) => return Ok(Async::NotReady),
+                Err(e) => {
+                    session.shutdown();
+                    return Err(From::from(e));
+                }
+            }.expect("connection closed");
+
             session.dispatch(cmd, data);
         }
     }

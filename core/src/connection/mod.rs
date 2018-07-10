@@ -11,21 +11,37 @@ use std::net::ToSocketAddrs;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Handle;
 use tokio_io::codec::Framed;
+use url::Url;
 
 use authentication::Credentials;
 use version;
 
+use proxytunnel;
+
 pub type Transport = Framed<TcpStream, APCodec>;
 
-pub fn connect<A: ToSocketAddrs>(
-    addr: A,
+pub fn connect(
+    addr: String,
     handle: &Handle,
+    proxy: &Option<Url>,
 ) -> Box<Future<Item = Transport, Error = io::Error>> {
-    let addr = addr.to_socket_addrs().unwrap().next().unwrap();
-    let socket = TcpStream::connect(&addr, handle);
-    let connection = socket.and_then(|socket| handshake(socket));
+    let (addr, connect_url) = match *proxy {
+        Some(ref url) => {
+            info!("Using proxy \"{}\"", url);
+            (url.to_socket_addrs().unwrap().next().unwrap(), Some(addr))
+        }
+        None => (addr.to_socket_addrs().unwrap().next().unwrap(), None),
+    };
 
-    Box::new(connection)
+    let socket = TcpStream::connect(&addr, handle);
+    if let Some(connect_url) = connect_url {
+        let connection = socket
+            .and_then(move |socket| proxytunnel::connect(socket, &connect_url).and_then(handshake));
+        Box::new(connection)
+    } else {
+        let connection = socket.and_then(handshake);
+        Box::new(connection)
+    }
 }
 
 pub fn authenticate(

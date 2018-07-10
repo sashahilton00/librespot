@@ -1,7 +1,7 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use futures;
-use futures::{future, Future};
 use futures::sync::oneshot;
+use futures::{future, Future};
 use std;
 use std::borrow::Cow;
 use std::io::{Read, Result, Seek, SeekFrom};
@@ -321,6 +321,10 @@ impl PlayerInternal {
                     self.handle_packet(packet, current_normalisation_factor);
                 }
             }
+
+            if self.session.is_invalid() {
+                return;
+            }
         }
     }
 
@@ -349,19 +353,21 @@ impl PlayerInternal {
     fn handle_packet(&mut self, packet: Option<VorbisPacket>, normalisation_factor: f32) {
         match packet {
             Some(mut packet) => {
-                if let Some(ref editor) = self.audio_filter {
-                    editor.modify_stream(&mut packet.data_mut())
-                };
+                if packet.data().len() > 0 {
+                    if let Some(ref editor) = self.audio_filter {
+                        editor.modify_stream(&mut packet.data_mut())
+                    };
 
-                if self.config.normalisation && normalisation_factor != 1.0 {
-                    for x in packet.data_mut().iter_mut() {
-                        *x = (*x as f32 * normalisation_factor) as i16;
+                    if self.config.normalisation && normalisation_factor != 1.0 {
+                        for x in packet.data_mut().iter_mut() {
+                            *x = (*x as f32 * normalisation_factor) as i16;
+                        }
                     }
-                }
 
-                if let Err(err) = self.sink.write(&packet.data()) {
-                    error!("Could not write audio: {}", err);
-                    self.stop_sink();
+                    if let Err(err) = self.sink.write(&packet.data()) {
+                        error!("Could not write audio: {}", err);
+                        self.stop_sink();
+                    }
                 }
             }
 

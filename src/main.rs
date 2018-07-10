@@ -9,12 +9,13 @@ extern crate rpassword;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_signal;
+extern crate url;
 
 use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use env_logger::LogBuilder;
-use futures::{Async, Future, Poll, Stream};
 use futures::sync::mpsc::UnboundedReceiver;
+use futures::{Async, Future, Poll, Stream};
 use std::env;
 use std::io::{self, stderr, Write};
 use std::mem;
@@ -23,6 +24,7 @@ use std::process::exit;
 use std::str::FromStr;
 use tokio_core::reactor::{Core, Handle};
 use tokio_io::IoStream;
+use url::Url;
 
 use librespot::core::authentication::{get_credentials, Credentials};
 use librespot::core::cache::Cache;
@@ -127,6 +129,7 @@ fn setup(args: &[String]) -> Setup {
         .optflag("v", "verbose", "Enable verbose output")
         .optopt("u", "username", "Username to sign in with", "USERNAME")
         .optopt("p", "password", "Password", "PASSWORD")
+        .optopt("", "proxy", "HTTP proxy to use when connecting", "PROXY")
         .optflag("", "disable-discovery", "Disable discovery mode")
         .optopt(
             "",
@@ -202,15 +205,22 @@ fn setup(args: &[String]) -> Setup {
     let mixer_name = matches.opt_str("mixer");
     let mixer = mixer::find(mixer_name.as_ref()).expect("Invalid mixer");
 
+    let use_audio_cache = !matches.opt_present("disable-audio-cache");
+
+    let cache = matches
+        .opt_str("c")
+        .map(|cache_location| Cache::new(PathBuf::from(cache_location), use_audio_cache));
+
     let initial_volume = matches
         .opt_str("initial-volume")
         .map(|volume| {
-            let volume = volume.parse::<i32>().unwrap();
-            if volume < 0 || volume > 100 {
+            let volume = volume.parse::<u16>().unwrap();
+            if volume > 100 {
                 panic!("Initial volume must be in the range 0-100");
             }
-            volume * 0xFFFF / 100
+            (volume as i32 * 0xFFFF / 100) as u16
         })
+        .or_else(|| cache.as_ref().and_then(Cache::volume))
         .unwrap_or(0x8000);
 
     let zeroconf_port = matches
@@ -219,11 +229,6 @@ fn setup(args: &[String]) -> Setup {
         .unwrap_or(0);
 
     let name = matches.opt_str("name").unwrap();
-    let use_audio_cache = !matches.opt_present("disable-audio-cache");
-
-    let cache = matches
-        .opt_str("c")
-        .map(|cache_location| Cache::new(PathBuf::from(cache_location), use_audio_cache));
 
     let credentials = {
         let cached_credentials = cache.as_ref().and_then(Cache::credentials);
@@ -248,6 +253,23 @@ fn setup(args: &[String]) -> Setup {
         SessionConfig {
             user_agent: version::version_string(),
             device_id: device_id,
+            proxy: matches.opt_str("proxy").or(std::env::var("http_proxy").ok()).map(
+                |s| {
+                    match Url::parse(&s) {
+                Ok(url) => {
+                    if url.host().is_none() || url.port().is_none() {
+                        panic!("Invalid proxy url, only urls on the format \"http://host:port\" are allowed");
+                    }
+
+                    if url.scheme() != "http" {
+                        panic!("Only unsecure http:// proxies are supported");
+                    }
+                    url
+                },
+                Err(err) => panic!("Invalid proxy url: {}, only urls on the format \"http://host:port\" are allowed", err)
+            }
+                },
+            ),
         }
     };
 
@@ -432,6 +454,7 @@ impl Future for Main {
             }
 
             if let Async::Ready(Some(())) = self.signal.poll().unwrap() {
+                trace!("Ctrl-C received");
                 if !self.shutdown {
                     if let Some(ref spirc) = self.spirc {
                         spirc.shutdown();

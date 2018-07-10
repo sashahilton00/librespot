@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use bytes::Bytes;
-use futures::{Async, Future, Poll};
 use futures::sync::oneshot;
+use futures::{Async, Future, Poll};
 use std::collections::HashMap;
 use std::io::Write;
 

@@ -1,8 +1,8 @@
 use bit_set::BitSet;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
-use futures::{Async, Future, Poll};
-use futures::Stream;
 use futures::sync::{mpsc, oneshot};
+use futures::Stream;
+use futures::{Async, Future, Poll};
 use std::cmp::min;
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};

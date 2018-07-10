@@ -1,6 +1,8 @@
 use super::{Open, Sink};
-use jack::prelude::{client_options, AsyncClient, AudioOutPort, AudioOutSpec, Client, JackControl, Port,
-                    ProcessHandler, ProcessScope};
+use jack::prelude::{
+    client_options, AsyncClient, AudioOutPort, AudioOutSpec, Client, JackControl, Port, ProcessHandler,
+    ProcessScope,
+};
 use std::io;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 
@@ -16,7 +18,7 @@ pub struct JackData {
 }
 
 fn pcm_to_f32(sample: i16) -> f32 {
-    sample as f32 / 32768.0;
+    sample as f32 / 32768.0
 }
 
 impl ProcessHandler for JackData {

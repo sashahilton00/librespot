@@ -7,9 +7,9 @@ use protobuf::{self, Message, MessageStatic};
 use rand::thread_rng;
 use std::io::{self, Read};
 use std::marker::PhantomData;
-use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_io::codec::Framed;
 use tokio_io::io::{read_exact, write_all, ReadExact, Window, WriteAll};
+use tokio_io::{AsyncRead, AsyncWrite};
 
 use super::codec::APCodec;
 use diffie_hellman::DHLocalKeys;
