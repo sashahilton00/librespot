@@ -21,7 +21,9 @@ RUN dpkg --add-architecture armel
 RUN dpkg --add-architecture mipsel
 RUN apt-get update
 
-RUN apt-get install -y curl git build-essential crossbuild-essential-arm64 crossbuild-essential-armel crossbuild-essential-armhf crossbuild-essential-mipsel
+RUN apt-get install -y --no-install-recommends \
+    build-essential ca-certificates curl git \
+    crossbuild-essential-arm64 crossbuild-essential-armel crossbuild-essential-armhf crossbuild-essential-mipsel
 RUN apt-get install -y libasound2-dev libasound2-dev:arm64 libasound2-dev:armel libasound2-dev:armhf libasound2-dev:mipsel
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -37,9 +39,15 @@ RUN mkdir /.cargo && \
     echo '[target.arm-unknown-linux-gnueabi]\nlinker = "arm-linux-gnueabi-gcc"' >> /.cargo/config && \
     echo '[target.mipsel-unknown-linux-gnu]\nlinker = "mipsel-linux-gnu-gcc"' >> /.cargo/config
 
+# Get raspbian cross compiler tools
 RUN mkdir /build && \
-    mkdir /pi-tools && \
-    curl -L https://github.com/raspberrypi/tools/archive/648a6eeb1e3c2b40af4eb34d88941ee0edeb3e9a.tar.gz | tar xz --strip-components 1 -C /pi-tools
+    mkdir /pi-tools && cd /pi-tools && git init && git config core.sparseCheckout true && \
+    git remote add origin https://github.com/raspberrypi/tools.git && \
+    echo "arm-bcm2708/arm-bcm2708hardfp-linux-gnueabi/*" >> .git/info/sparse-checkout && \
+    echo "arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/*" >> .git/info/sparse-checkout && \
+    git pull --depth=1 origin master
+
+RUN apt-get install -y pkg-config
 
 ENV CARGO_TARGET_DIR /build
 ENV CARGO_HOME /build/cache
