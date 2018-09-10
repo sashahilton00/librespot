@@ -15,6 +15,7 @@ use crypto::digest::Digest;
 use crypto::sha1::Sha1;
 use env_logger::LogBuilder;
 use futures::sync::mpsc::UnboundedReceiver;
+use std::sync::mpsc::{Receiver,channel,TryRecvError};
 use futures::{Async, Future, Poll, Stream};
 use std::env;
 use std::io::{self, stderr, Write};
@@ -348,7 +349,7 @@ struct Main {
     player_event_program: Option<String>,
 
     session: Option<Session>,
-    event_channel: Option<UnboundedReceiver<Event>>,
+    event_channel: Option<Receiver<Event>>,
 }
 
 impl Main {
@@ -430,7 +431,8 @@ impl Future for Main {
                 let connect_config = self.connect_config.clone();
 
                 // For event hooks
-                let (event_sender, event_receiver) = futures::sync::mpsc::unbounded();
+                // let (event_sender, event_receiver) = futures::sync::mpsc::unbounded();
+                let (event_sender, event_receiver) = channel();
 
                 let audio_filter = mixer.get_audio_filter();
                 let backend = self.backend;
@@ -482,12 +484,19 @@ impl Future for Main {
             }
 
             if let Some(ref mut event_channel) = self.event_channel {
-                if let Async::Ready(Some(event)) = event_channel.poll().unwrap() {
-                    info!("Event: {:?}", event);
-                    if let Some(ref program) = self.player_event_program {
-                        run_program_on_events(event, program);
-                    }
+                match  event_channel.try_recv() {
+                    Ok(event) => {
+                        info!("Event: {:?}", event)},
+                    Err(TryRecvError::Empty) => progress = true,
+                    Err(TryRecvError::Disconnected) => (),
                 }
+                //
+                // if let Async::Ready(Some(event)) = event_channel.try_recv().unwrap() {
+                //     info!("Event: {:?}", event);
+                //     if let Some(ref program) = self.player_event_program {
+                //         run_program_on_events(event, program);
+                //     }
+                // }
             }
 
             if !progress {

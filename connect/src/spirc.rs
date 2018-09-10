@@ -1,5 +1,6 @@
 use futures::future;
 use futures::sync::{mpsc, oneshot};
+// use std::sync::mpsc;
 use futures::{Async, Future, Poll, Sink, Stream};
 use protobuf::{self, Message};
 
@@ -22,7 +23,7 @@ use playback::player::Player;
 use rand;
 use rand::Rng;
 use std;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
 
 pub struct SpircTask {
     player: Player,
@@ -42,7 +43,8 @@ pub struct SpircTask {
 
     shutdown: bool,
     session: Session,
-    hook_event_sender: mpsc::UnboundedSender<Event>,
+    hook_event_sender: std::sync::mpsc::Sender<Event>,
+    token_info: (Instant, Duration),
     token_fut: Box<Future<Item = keymaster::Token, Error = MercuryError>>,
 }
 
@@ -213,7 +215,7 @@ impl Spirc {
         session: Session,
         player: Player,
         mixer: Box<Mixer>,
-        hook_event_sender: mpsc::UnboundedSender<Event>,
+        hook_event_sender:  std::sync::mpsc::Sender<Event>,
     ) -> (Spirc, SpircTask) {
         debug!("new Spirc[{}]", session.session_id());
 
@@ -264,6 +266,7 @@ impl Spirc {
             shutdown: false,
             session: session.clone(),
             hook_event_sender: hook_event_sender, // We want hooks from SpircTask, and not Spirc right?
+            token_info: (Instant::now(),Duration::from_secs(5)),
             token_fut: Box::new(future::empty()),
         };
 
@@ -345,14 +348,23 @@ impl Future for SpircTask {
                 match self.token_fut.poll() {
                     Ok(Async::Ready(token)) => {
                         self.send_event(Event::GotToken {
-                            token: token.access_token,
+                            token: token.clone(),
                         });
+                        progress = true;
+                        // self.token_info = (Instant::now(), Duration::from_secs(token.expires_in.into()));
+                        self.token_info = (Instant::now(), Duration::from_secs(20));
+                        info!("Token got at: {:?}", self.token_info);
                         self.token_fut = Box::new(future::empty());
                     }
                     Ok(Async::NotReady) => (),
                     Err(err) => info!("Error: {:?}", err),
                 }
             }
+
+            if self.token_info.0.elapsed() > self.token_info.1 {
+                // info!("Refresh token...");
+            }
+
 
             let poll_sender = self.sender.poll_complete().unwrap();
 
@@ -780,16 +792,21 @@ impl SpircTask {
     }
 
     fn request_access_token(&mut self, client_id: &str, scopes: &str) {
+        debug!("Requesting API access token");
         self.token_fut = keymaster::get_token(&self.session, client_id, scopes)
     }
 
     fn send_event(&mut self, event: Event) {
-        let _ = self.hook_event_sender.unbounded_send(event.clone());
+        let _ = self.hook_event_sender.send(event.clone());
     }
 
     fn set_volume(&mut self, volume: u16) {
         self.device.set_volume(volume as u32);
-        self.mixer.set_volume(volume_to_mixer(volume, self.linear_volume));
+        let volume_to_mixer = volume_to_mixer(volume, self.linear_volume);
+        self.mixer.set_volume(volume_to_mixer);
+        self.send_event(Event::Volume {
+            volume_to_mixer: volume_to_mixer,
+        });
         if let Some(cache) = self.session.cache() {
             cache.save_volume(Volume { volume })
         }

@@ -35,7 +35,7 @@ struct PlayerInternal {
     sink: Box<Sink>,
     sink_running: bool,
     audio_filter: Option<Box<AudioFilter + Send>>,
-    event_sender: futures::sync::mpsc::UnboundedSender<Event>,
+    event_sender: std::sync::mpsc::Sender<Event>,
 }
 
 enum PlayerCommand {
@@ -95,7 +95,7 @@ impl Player {
     pub fn new<F>(
         config: PlayerConfig,
         session: Session,
-        event_sender: futures::sync::mpsc::UnboundedSender<Event>,
+        event_sender: std::sync::mpsc::Sender<Event>,
         audio_filter: Option<Box<AudioFilter + Send>>,
         sink_builder: F,
     ) -> (Player)
@@ -493,7 +493,7 @@ impl PlayerInternal {
     }
 
     fn send_event(&mut self, event: Event) {
-        let _ = self.event_sender.unbounded_send(event.clone());
+        let _ = self.event_sender.send(event.clone());
     }
 
     fn find_available_alternative<'a>(&self, track: &'a Track) -> Option<Cow<'a, Track>> {

@@ -1,4 +1,5 @@
 use spotify_id::SpotifyId;
+use keymaster::Token;
 
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -11,7 +12,7 @@ pub enum Event {
     SinkActive,
     SinkInactive,
     GotToken {
-        token: String,
+        token: Token,
     },
     Load {
         track_id: SpotifyId,

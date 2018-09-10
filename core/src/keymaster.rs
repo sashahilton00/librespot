@@ -4,7 +4,7 @@ use serde_json;
 use mercury::MercuryError;
 use session::Session;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Token {
     pub access_token: String,
