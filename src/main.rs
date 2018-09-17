@@ -164,6 +164,11 @@ fn setup(args: &[String]) -> Setup {
             "Alsa mixer index, Index of the cards mixer. Defaults to 0",
             "MIXER_INDEX",
         )
+        .optflag(
+            "",
+            "mixer-linear-volume",
+            "Disable alsa's mapped volume scale (cubic). Default false",
+        )
         .optopt(
             "",
             "initial-volume",
@@ -226,9 +231,13 @@ fn setup(args: &[String]) -> Setup {
     let mixer = mixer::find(mixer_name.as_ref()).expect("Invalid mixer");
 
     let mixer_config = MixerConfig {
-            card:  matches.opt_str("mixer-card").unwrap_or(String::from("default")),
-            mixer: matches.opt_str("mixer-name").unwrap_or(String::from("PCM")),
-            index: matches.opt_str("mixer-index").map(|index| index.parse::<u32>().unwrap()).unwrap_or(0),
+        card: matches.opt_str("mixer-card").unwrap_or(String::from("default")),
+        mixer: matches.opt_str("mixer-name").unwrap_or(String::from("PCM")),
+        index: matches
+            .opt_str("mixer-index")
+            .map(|index| index.parse::<u32>().unwrap())
+            .unwrap_or(0),
+        mapped_volume: !matches.opt_present("mixer-linear-volume"),
     };
 
     let use_audio_cache = !matches.opt_present("disable-audio-cache");

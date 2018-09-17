@@ -25,13 +25,16 @@ pub struct MixerConfig {
     pub card: String,
     pub mixer: String,
     pub index: u32,
+    pub mapped_volume: bool,
 }
 
 impl Default for MixerConfig {
-    fn default() -> MixerConfig { MixerConfig {
-        card: String::from("default"),
-        mixer: String::from("PCM"),
-        index: 0,
+    fn default() -> MixerConfig {
+        MixerConfig {
+            card: String::from("default"),
+            mixer: String::from("PCM"),
+            index: 0,
+            mapped_volume: true,
         }
     }
 }
