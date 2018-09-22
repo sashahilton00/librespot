@@ -19,9 +19,11 @@ pub enum Event {
     },
     Pause {
         track_id: SpotifyId,
+        position_ms: u32,
     },
     Play {
         track_id: SpotifyId,
+        position_ms: u32,
     },
     Next {
         track_id: SpotifyId,

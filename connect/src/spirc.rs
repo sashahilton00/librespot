@@ -598,7 +598,9 @@ impl SpircTask {
             self.state.set_status(PlayStatus::kPlayStatusPlay);
             self.state.set_position_measured_at(now_ms() as u64);
             let track_id = self.get_current_track_id();
-            self.send_event(Event::Play { track_id: track_id });
+            let postion = self.state.get_position_ms();
+            self.send_event(Event::Play { track_id: track_id,
+                                          position_ms: postion });
         }
     }
 
@@ -624,7 +626,7 @@ impl SpircTask {
             self.state.set_position_ms(position + diff as u32);
             self.state.set_position_measured_at(now);
             let track_id = self.get_current_track_id();
-            self.send_event(Event::Pause { track_id: track_id });
+            self.send_event(Event::Pause { track_id: track_id, position_ms: position });
         }
     }
 
@@ -798,7 +800,7 @@ impl SpircTask {
             cache.save_volume(Volume { volume })
         }
     }
-    
+
 }
 
 impl Drop for SpircTask {
