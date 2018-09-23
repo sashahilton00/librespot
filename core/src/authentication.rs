@@ -1,14 +1,14 @@
-use base64;
-use byteorder::{BigEndian, ByteOrder};
 use aes::Aes192;
-use block_modes::{Ecb, BlockMode};
+use base64;
 use block_modes::block_padding::ZeroPadding;
+use block_modes::{BlockMode, Ecb};
+use byteorder::{BigEndian, ByteOrder};
 use hmac::Hmac;
-use sha1::{Sha1, Digest};
 use pbkdf2::pbkdf2;
 use protobuf::ProtobufEnum;
 use serde;
 use serde_json;
+use sha1::{Digest, Sha1};
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::ops::FnOnce;
@@ -78,8 +78,8 @@ impl Credentials {
         let mut data = base64::decode(encrypted_blob).unwrap();
         let blob = {
             // Anyone know what this block mode is ?
-            let mut cipher = Ecb::<Aes192, ZeroPadding>::new_varkey(&key)
-                .expect("never fails, key is 24 bytes long");
+            let mut cipher =
+                Ecb::<Aes192, ZeroPadding>::new_varkey(&key).expect("never fails, key is 24 bytes long");
             cipher.decrypt_nopad(&mut data).unwrap();
 
             let l = data.len();

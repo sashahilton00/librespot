@@ -4,17 +4,17 @@ extern crate getopts;
 extern crate librespot;
 #[macro_use]
 extern crate log;
+extern crate hex;
 extern crate rpassword;
+extern crate sha1;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_signal;
 extern crate url;
-extern crate sha1;
-extern crate hex;
 
-use sha1::{Sha1, Digest};
 use env_logger::Builder;
 use futures::{Async, Future, Poll, Stream};
+use sha1::{Digest, Sha1};
 use std::env;
 use std::io::{self, stderr, Write};
 use std::mem;
@@ -252,8 +252,7 @@ fn setup(args: &[String]) -> Setup {
                 panic!("Initial volume must be in the range 0-100");
             }
             (volume as i32 * 0xFFFF / 100) as u16
-        })
-        .or_else(|| cache.as_ref().and_then(Cache::volume))
+        }).or_else(|| cache.as_ref().and_then(Cache::volume))
         .unwrap_or(0x8000);
 
     let zeroconf_port = matches
@@ -523,9 +522,9 @@ impl Future for Main {
                     Ok(event) => {
                         debug!("Event: {:?}", event);
                         if let Some(ref program) = self.player_event_program {
-                                run_program_on_events(event, program);
+                            run_program_on_events(event, program);
                         }
-                    },
+                    }
                     Err(TryRecvError::Empty) => (),
                     Err(TryRecvError::Disconnected) => (),
                 }

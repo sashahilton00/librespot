@@ -36,7 +36,9 @@ impl AlsaMixer {
         let selem = mixer.find_selem(&sid).expect("Couldn't find SelemId");
         let (min, max) = selem.get_playback_volume_range();
         let (min_db, max_db) = selem.get_playback_db_range();
-        let hw_mix = selem.get_playback_vol_db(alsa::mixer::SelemChannelId::mono()).is_ok();
+        let hw_mix = selem
+            .get_playback_vol_db(alsa::mixer::SelemChannelId::mono())
+            .is_ok();
 
         info!(
             "Alsa min: {} ({:?}[dB]) -- max: {} ({:?}[dB]) HW: {:?}",
@@ -84,7 +86,8 @@ impl AlsaMixer {
             if self.config.mapped_volume {
                 info!("Using mapped_volume");
                 //TODO Check if min is not mute!
-                let vol_db = ((self.pvol(vol, 0x0000, 0xFFFF)).log10() * 6000.0).floor() as i64 + self.params.max;
+                let vol_db =
+                    ((self.pvol(vol, 0x0000, 0xFFFF)).log10() * 6000.0).floor() as i64 + self.params.max;
                 selem
                     .set_playback_volume_all(vol_db)
                     .expect("Couldn't set alsa dB volume");
@@ -92,12 +95,17 @@ impl AlsaMixer {
                     "Mapping volume [{:.3}%] {:?} [u16] ->> Alsa [{:.3}%] {:?} [dB]",
                     self.pvol(vol, 0x0000, 0xFFFF) * 100.0,
                     vol,
-                    self.pvol(vol_db as f64, self.params.min_db.to_db() as f64, self.params.max_db.to_db() as f64) * 100.0,
+                    self.pvol(
+                        vol_db as f64,
+                        self.params.min_db.to_db() as f64,
+                        self.params.max_db.to_db() as f64
+                    ) * 100.0,
                     vol_db as f64 / 100.0,
                 );
             } else {
                 info!("Using linear vol");
-                let alsa_volume = ((vol as f64 / 0xFFFF as f64) * self.params.range) as i64 + self.params.min;
+                let alsa_volume =
+                    ((vol as f64 / 0xFFFF as f64) * self.params.range) as i64 + self.params.min;
                 selem
                     .set_playback_volume_all(alsa_volume)
                     .expect("Couldn't set alsa raw volume");
@@ -105,11 +113,11 @@ impl AlsaMixer {
                     "Mapping volume [{:.3}%] {:?} [u16] ->> Alsa [{:.3}%] {:?} [i64]",
                     self.pvol(vol, 0x0000, 0xFFFF) * 100.0,
                     vol,
-                    self.pvol(alsa_volume as f64, self.params.min as f64, self.params.max as f64) * 100.0,
+                    self.pvol(alsa_volume as f64, self.params.min as f64, self.params.max as f64)
+                        * 100.0,
                     alsa_volume
                 );
             };
-
 
             new_vol = vol; // Meh
         } else {

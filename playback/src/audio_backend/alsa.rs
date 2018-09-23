@@ -64,7 +64,7 @@ fn open_device(dev_name: &str) -> Result<(PCM), Box<Error>> {
 }
 
 impl Open for AlsaSink {
-   fn open(device: Option<String>) -> AlsaSink {
+    fn open(device: Option<String>) -> AlsaSink {
         info!("Using alsa sink");
 
         let name = match device.as_ref().map(AsRef::as_ref) {

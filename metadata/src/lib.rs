@@ -125,8 +125,7 @@ impl Metadata for Track {
                 let mut dst = [0u8; 20];
                 dst.clone_from_slice(file.get_file_id());
                 (file.get_format(), FileId(dst))
-            })
-            .collect();
+            }).collect();
 
         Track {
             id: SpotifyId::from_raw(msg.get_gid()).unwrap(),
@@ -177,8 +176,7 @@ impl Metadata for Album {
                 let mut dst = [0u8; 20];
                 dst.clone_from_slice(image.get_file_id());
                 FileId(dst)
-            })
-            .collect::<Vec<_>>();
+            }).collect::<Vec<_>>();
 
         Album {
             id: SpotifyId::from_raw(msg.get_gid()).unwrap(),

@@ -1,13 +1,13 @@
-use base64;
-use sha1::{Sha1, Digest};
-use hmac::{Hmac, Mac};
-use aes_ctr::Aes128Ctr;
-use aes_ctr::stream_cipher::{NewFixStreamCipher, StreamCipherCore};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
+use aes_ctr::stream_cipher::{NewFixStreamCipher, StreamCipherCore};
+use aes_ctr::Aes128Ctr;
+use base64;
 use futures::sync::mpsc;
 use futures::{Future, Poll, Stream};
+use hmac::{Hmac, Mac};
 use hyper::server::{Http, Request, Response, Service};
 use hyper::{self, Get, Post, StatusCode};
+use sha1::{Digest, Sha1};
 
 #[cfg(feature = "with-dns-sd")]
 use dns_sd::DNSService;
@@ -114,22 +114,19 @@ impl Discovery {
         let base_key = &base_key[..16];
 
         let checksum_key = {
-            let mut h = HmacSha1::new_varkey(base_key)
-                .expect("HMAC can take key of any size");
+            let mut h = HmacSha1::new_varkey(base_key).expect("HMAC can take key of any size");
             h.input(b"checksum");
             h.result().code()
         };
 
         let encryption_key = {
-            let mut h = HmacSha1::new_varkey(&base_key)
-                .expect("HMAC can take key of any size");
+            let mut h = HmacSha1::new_varkey(&base_key).expect("HMAC can take key of any size");
             h.input(b"encryption");
             h.result().code()
         };
 
         let mac = {
-            let mut h = HmacSha1::new_varkey(&checksum_key)
-                .expect("HMAC can take key of any size");
+            let mut h = HmacSha1::new_varkey(&checksum_key).expect("HMAC can take key of any size");
             h.input(encrypted);
             h.result().code()
         };
@@ -189,16 +186,15 @@ impl Service for Discovery {
                 acc.extend_from_slice(chunk.as_ref());
                 Ok::<_, hyper::Error>(acc)
             }).map(move |body| {
-                    params.extend(url::form_urlencoded::parse(&body).into_owned());
-                    params
-                })
-                .and_then(
-                    move |params| match (method, params.get("action").map(AsRef::as_ref)) {
-                        (Get, Some("getInfo")) => this.handle_get_info(&params),
-                        (Post, Some("addUser")) => this.handle_add_user(&params),
-                        _ => this.not_found(),
-                    },
-                ),
+                params.extend(url::form_urlencoded::parse(&body).into_owned());
+                params
+            }).and_then(move |params| {
+                match (method, params.get("action").map(AsRef::as_ref)) {
+                    (Get, Some("getInfo")) => this.handle_get_info(&params),
+                    (Post, Some("addUser")) => this.handle_add_user(&params),
+                    _ => this.not_found(),
+                }
+            }),
         )
     }
 }
@@ -241,8 +237,7 @@ pub fn discovery(
             .for_each(move |connection| {
                 handle.spawn(connection.then(|_| Ok(())));
                 Ok(())
-            })
-            .then(|_| Ok(()))
+            }).then(|_| Ok(()))
     };
     handle.spawn(server_future);
 

@@ -1,5 +1,5 @@
-use spotify_id::SpotifyId;
 use keymaster::Token;
+use spotify_id::SpotifyId;
 
 #[derive(Debug, Clone)]
 pub enum Event {

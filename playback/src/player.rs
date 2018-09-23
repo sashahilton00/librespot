@@ -1,5 +1,4 @@
 use byteorder::{LittleEndian, ReadBytesExt};
-use futures;
 use futures::sync::oneshot;
 use futures::{future, Future};
 use std;
