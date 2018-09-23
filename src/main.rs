@@ -13,7 +13,7 @@ extern crate sha1;
 extern crate hex;
 
 use sha1::{Sha1, Digest};
-use env_logger::LogBuilder;
+use env_logger::Builder;
 use futures::{Async, Future, Poll, Stream};
 use std::env;
 use std::io::{self, stderr, Write};
@@ -53,11 +53,11 @@ fn usage(program: &str, opts: &getopts::Options) -> String {
 }
 
 fn setup_logging(verbose: bool) {
-    let mut builder = LogBuilder::new();
+    let mut builder = Builder::new();
     match env::var("RUST_LOG") {
         Ok(config) => {
             builder.parse(&config);
-            builder.init().unwrap();
+            builder.init();
 
             if verbose {
                 warn!("`--verbose` flag overidden by `RUST_LOG` environment variable");
@@ -69,7 +69,7 @@ fn setup_logging(verbose: bool) {
             } else {
                 builder.parse("mdns=info,librespot=info");
             }
-            builder.init().unwrap();
+            builder.init();
         }
     }
 }

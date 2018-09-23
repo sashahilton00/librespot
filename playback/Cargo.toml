@@ -11,8 +11,8 @@ path = "../core"
 path = "../metadata"
 
 [dependencies]
-futures = "0.1.8"
-log = "0.3.5"
+futures = "0.1.23"
+log = "0.4.0"
 byteorder = "1.2.1"
 
 alsa            = { git = "https://github.com/diwic/alsa-rs.git", optional = true }

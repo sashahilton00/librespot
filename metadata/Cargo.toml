@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Paul Lietar <paul@lietar.net>"]
 
 [dependencies]
-byteorder = "1.0"
-futures = "0.1.8"
+byteorder = "1.2.1"
+futures = "0.1.23"
 linear-map = "1.0"
 protobuf = "1.1"
 
