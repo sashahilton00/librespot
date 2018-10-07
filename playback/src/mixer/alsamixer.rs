@@ -5,6 +5,8 @@ use std::error::Error;
 
 use alsa;
 
+const SND_CTL_TLV_DB_GAIN_MUTE: i64 = -9999999;
+
 #[derive(Clone)]
 struct AlsaMixerVolumeParams {
     min: i64,
@@ -12,6 +14,7 @@ struct AlsaMixerVolumeParams {
     range: f64,
     min_db: alsa::mixer::MilliBel,
     max_db: alsa::mixer::MilliBel,
+    has_switch: bool,
 }
 
 #[derive(Clone)]
@@ -39,6 +42,7 @@ impl AlsaMixer {
         let hw_mix = selem
             .get_playback_vol_db(alsa::mixer::SelemChannelId::mono())
             .is_ok();
+        let has_switch = selem.has_playback_switch();
 
         info!(
             "Alsa min: {} ({:?}[dB]) -- max: {} ({:?}[dB]) HW: {:?}",
@@ -55,6 +59,10 @@ impl AlsaMixer {
             info!("Using Alsa linear volume");
         }
 
+        if min_db != alsa::mixer::MilliBel(SND_CTL_TLV_DB_GAIN_MUTE) {
+            warn!("Alsa min-db is not SND_CTL_TLV_DB_GAIN_MUTE!!");
+        }
+
         Ok(AlsaMixer {
             config: config,
             params: AlsaMixerVolumeParams {
@@ -63,6 +71,7 @@ impl AlsaMixer {
                 range: (max - min) as f64,
                 min_db: min_db,
                 max_db: max_db,
+                has_switch: has_switch,
             },
         })
     }
@@ -77,40 +86,51 @@ impl AlsaMixer {
             .expect("Couldn't get current volume");
         let cur_vol_db = selem
             .get_playback_vol_db(alsa::mixer::SelemChannelId::mono())
-            .unwrap_or(alsa::mixer::MilliBel(9999));
+            .unwrap_or(alsa::mixer::MilliBel(-SND_CTL_TLV_DB_GAIN_MUTE));
 
         let new_vol: u16;
         info!("Current alsa volume: {}[i64] {:?}", cur_vol, cur_vol_db);
 
         if let Some(vol) = set_volume {
+            if self.params.has_switch {
+                let is_muted = selem
+                    .get_playback_switch(alsa::mixer::SelemChannelId::mono())
+                    .map(|b| b == 0)
+                    .unwrap_or(false);
+                if vol == 0 {
+                    info!("Toggling mute::True");
+                    selem.set_playback_switch_all(0).expect("Can't switch mute");
+
+                    return Ok(vol);
+                } else if is_muted {
+                    info!("Toggling mute::False");
+                    selem.set_playback_switch_all(1).expect("Can't reset mute");
+                }
+            }
+
             if self.config.mapped_volume {
-                info!("Using mapped_volume");
-                //TODO Check if min is not mute!
-                let vol_db =
-                    ((self.pvol(vol, 0x0000, 0xFFFF)).log10() * 6000.0).floor() as i64 + self.params.max;
+                // Workaround for 32bit truncation
+                // TODO: look into a better way of doing this
+                let vol_db = i64::from((self.pvol(vol, 0x0000, 0xFFFF).log10() * 6000.0).floor() as i32)
+                    + self.params.max_db.0;
                 selem
-                    .set_playback_volume_all(vol_db)
+                    .set_playback_db_all(alsa::mixer::MilliBel(vol_db), alsa::Round::Floor)
                     .expect("Couldn't set alsa dB volume");
                 info!(
-                    "Mapping volume [{:.3}%] {:?} [u16] ->> Alsa [{:.3}%] {:?} [dB]",
+                    "Mapping volume [{:.3}%] {} [u16] ->> Alsa [{:.3}%] {} [dB]",
                     self.pvol(vol, 0x0000, 0xFFFF) * 100.0,
                     vol,
-                    self.pvol(
-                        vol_db as f64,
-                        self.params.min_db.to_db() as f64,
-                        self.params.max_db.to_db() as f64
-                    ) * 100.0,
+                    self.pvol(vol_db as f64, self.params.min as f64, self.params.max as f64) * 100.0,
                     vol_db as f64 / 100.0,
                 );
             } else {
-                info!("Using linear vol");
                 let alsa_volume =
                     ((vol as f64 / 0xFFFF as f64) * self.params.range) as i64 + self.params.min;
                 selem
                     .set_playback_volume_all(alsa_volume)
                     .expect("Couldn't set alsa raw volume");
                 info!(
-                    "Mapping volume [{:.3}%] {:?} [u16] ->> Alsa [{:.3}%] {:?} [i64]",
+                    "Mapping (lin) volume [{:.3}%] {:?} [u16] ->> Alsa [{:.3}%] {:?} [i64]",
                     self.pvol(vol, 0x0000, 0xFFFF) * 100.0,
                     vol,
                     self.pvol(alsa_volume as f64, self.params.min as f64, self.params.max as f64)
