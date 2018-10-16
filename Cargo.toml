@@ -8,6 +8,23 @@ keywords = ["spotify"]
 repository = "https://github.com/plietar/librespot"
 readme = "README.md"
 
+[package.metadata.deb]
+maintainer = "librespot-org"
+copyright = "2018 Paul Liétar"
+license_file = ["LICENSE", "4"]
+depends = "$auto"
+extended_description = """\
+librespot is an open source client library for Spotify. It enables applications \
+to use Spotify's service, without using the official but closed-source \
+libspotify. Additionally, it will provide extra features which are not \
+available in the official library."""
+section = "sound"
+priority = "optional"
+assets = [
+    ["target/release/librespot", "usr/bin/", "755"],
+    ["contrib/librespot.service", "lib/systemd/system/", "644"]
+]
+
 [workspace]
 
 [lib]
@@ -18,19 +35,6 @@ path = "src/lib.rs"
 name = "librespot"
 path = "src/main.rs"
 doc = false
-
-[dependencies.librespot-audio]
-path = "audio"
-[dependencies.librespot-connect]
-path = "connect"
-[dependencies.librespot-core]
-path = "core"
-[dependencies.librespot-metadata]
-path = "metadata"
-[dependencies.librespot-playback]
-path = "playback"
-[dependencies.librespot-protocol]
-path = "protocol"
 
 [dependencies]
 base64 = "0.5.0"
@@ -50,8 +54,21 @@ tokio-core = "0.1.2"
 tokio-io = "0.1"
 tokio-signal = "0.1.2"
 url = "1.7.0"
-sha-1 = "0.7.0"
+sha-1 = "0.8.0"
 hex = "0.3.2"
+
+[dependencies.librespot-audio]
+path = "audio"
+[dependencies.librespot-connect]
+path = "connect"
+[dependencies.librespot-core]
+path = "core"
+[dependencies.librespot-metadata]
+path = "metadata"
+[dependencies.librespot-playback]
+path = "playback"
+[dependencies.librespot-protocol]
+path = "protocol"
 
 [build-dependencies]
 rand            = "0.3.13"
@@ -69,20 +86,3 @@ with-vorbis = ["librespot-audio/with-vorbis"]
 with-dns-sd = ["librespot-connect/with-dns-sd"]
 
 default = ["librespot-playback/portaudio-backend"]
-
-[package.metadata.deb]
-maintainer = "librespot-org"
-copyright = "2018 Paul Liétar"
-license_file = ["LICENSE", "4"]
-depends = "$auto"
-extended_description = """\
-librespot is an open source client library for Spotify. It enables applications \
-to use Spotify's service, without using the official but closed-source \
-libspotify. Additionally, it will provide extra features which are not \
-available in the official library."""
-section = "sound"
-priority = "optional"
-assets = [
-    ["target/release/librespot", "usr/bin/", "755"],
-    ["contrib/librespot.service", "lib/systemd/system/", "644"]
-]
