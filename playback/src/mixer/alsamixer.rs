@@ -109,19 +109,18 @@ impl AlsaMixer {
             }
 
             if self.config.mapped_volume {
-                // Workaround for 32bit truncation
-                // TODO: look into a better way of doing this
-                let vol_db = i64::from((self.pvol(vol, 0x0000, 0xFFFF).log10() * 6000.0).floor() as i32)
+                let vol_db = (self.pvol(vol, 0x0000, 0xFFFF).log10() * 6000.0).floor() as i64
                     + self.params.max_db.0;
                 selem
                     .set_playback_db_all(alsa::mixer::MilliBel(vol_db), alsa::Round::Floor)
                     .expect("Couldn't set alsa dB volume");
                 info!(
-                    "Mapping volume [{:.3}%] {} [u16] ->> Alsa [{:.3}%] {} [dB]",
+                    "Mapping volume [{:.3}%] {} [u16] ->> Alsa [{:.3}%] {} [dB] - {} [i64]",
                     self.pvol(vol, 0x0000, 0xFFFF) * 100.0,
                     vol,
                     self.pvol(vol_db as f64, self.params.min as f64, self.params.max as f64) * 100.0,
                     vol_db as f64 / 100.0,
+                    vol_db,
                 );
             } else {
                 let alsa_volume =

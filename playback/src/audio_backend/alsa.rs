@@ -10,11 +10,18 @@ use std::process::exit;
 pub struct AlsaSink(Option<PCM>, String);
 
 fn list_outputs() {
-    for t in &["pcm", "ctl", "rawmidi", "timer", "seq", "hwdep"] {
+    for t in &["pcm", "ctl", "hwdep"] {
         println!("{} devices:", t);
         let i = HintIter::new(None, &*CString::new(*t).unwrap()).unwrap();
         for a in i {
-            println!("  {:?}", a)
+            if let Some(Direction::Playback) = a.direction {
+                // mimic aplay -L
+                println!(
+                    "{}\n\t{}\n",
+                    a.name.unwrap(),
+                    a.desc.unwrap().replace("\n", "\n\t")
+                );
+            }
         }
     }
 }
@@ -34,10 +41,12 @@ fn open_device(dev_name: &str) -> Result<(PCM), Box<Error>> {
         hwp.set_format(Format::s16())?;
         hwp.set_rate(44100, ValueOr::Nearest)?;
         hwp.set_channels(2)?;
-        // hwp.set_period_size_near(256, ValueOr::Nearest)?;
-        hwp.set_buffer_size_near(11025 * 2)?; // ~ 0.25 x 2 s latency
-
+        hwp.set_buffer_size_near(22050)?; // ~ 0.5s latency
         pcm.hw_params(&hwp)?;
+
+        let swp = pcm.sw_params_current()?;
+        swp.set_start_threshold(hwp.get_buffer_size()? - hwp.get_period_size()?)?;
+        pcm.sw_params(&swp)?;
     }
 
     // Additional software paramters + check
